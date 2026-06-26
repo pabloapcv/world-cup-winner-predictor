@@ -1,0 +1,13 @@
+{
+  "total_matches": 275,
+  "date_range": "1990-06-08 \u2192 2025-06-12",
+  "teams": 69,
+  "tournaments": {
+    "World Cup": 222,
+    "International": 28,
+    "Euro": 22,
+    "Nations League": 3
+  },
+  "avg_goals_per_match": 2.55,
+  "draw_rate": 0.229
+}

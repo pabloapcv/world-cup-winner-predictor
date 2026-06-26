@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+dist/
+build/
+.venv/
+venv/
+.env
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Trained models (reproducible via scripts)
+models/*.joblib
+
+# OS / tooling
+.DS_Store
+outputs/.mpl/
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
