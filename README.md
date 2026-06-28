@@ -119,7 +119,7 @@ flowchart LR
 
 ```bash
 # 1. Clone & install
-git clone <your-repo-url>
+git clone https://github.com/pabloapcv/world-cup-winner-predictor.git
 cd world-cup-winner-predictor
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
