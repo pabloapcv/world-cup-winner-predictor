@@ -64,12 +64,33 @@ flowchart LR
 | **HistGradientBoosting** | 40% | Non-linear patterns from Elo features; isotonic calibration |
 | **Elo** | 25% | Dynamic team strength ratings with draw probability |
 
+### Engineered features (14 matchup + context)
+
+| Category | Features |
+|----------|----------|
+| **Strength** | Elo diff, home/away Elo, squad value log-ratio |
+| **Form** | Points last 5/10, win rate diff, goals scored/conceded rolling averages |
+| **Matchup** | Attack diff, defense diff, experience gap |
+| **Tournament** | Neutral venue, World Cup flag, host-nation boost |
+| **Path-to-final** | Group difficulty, bracket path score, easy-path index |
+
+Rolling stats use `.shift(1)` — no data leakage from future matches.
+
 ### Simulation engine
 
 - Official **2026 draw**: 12 groups of 4, top-2 + 8 best third-place teams → Round of 32
 - Group stage simulated via Poisson goal sampling
 - Knockout ties resolved by Elo-weighted penalty shootouts
-- Seeded bracket by team strength
+- Tracks **stage reach probabilities** (R32 → R16 → QF → SF → Final → Champion)
+- Path difficulty separates "best team" from "most likely winner"
+
+### Interactive dashboard
+
+```bash
+streamlit run app/streamlit_app.py
+```
+
+Pages: champion odds, team deep dive, match calculator, path difficulty ranking.
 
 ---
 
@@ -89,7 +110,11 @@ flowchart LR
 ├── scripts/
 │   ├── generate_matches.py        # Build dataset
 │   └── generate_report.py         # Full pipeline → outputs/
-├── wcp/                           # Core Python package
+├── app/
+│   └── streamlit_app.py           # Interactive dashboard
+├── wcp/
+│   ├── team_features.py           # Rolling form & squad features
+│   ├── path_features.py           # Bracket/group difficulty                           # Core Python package
 │   ├── models/                    # Elo, Dixon-Coles, GBM, ensemble
 │   ├── data.py                    # Loading & normalization
 │   ├── features.py                # Feature engineering
@@ -131,7 +156,10 @@ python main.py train
 # 3. Run predictions
 python main.py predict --sims 10000
 
-# 4. Generate full portfolio report (figures + CSVs)
+# 4. Launch dashboard
+streamlit run app/streamlit_app.py
+
+# 5. Generate full portfolio report (figures + CSVs)
 python scripts/generate_report.py --sims 10000
 
 # 5. Explore interactively

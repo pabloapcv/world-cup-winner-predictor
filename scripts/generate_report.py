@@ -18,7 +18,8 @@ from wcp.data import load_matches
 from wcp.evaluate import dataset_summary, evaluate_models
 from wcp.models.ensemble import EnsemblePredictor
 from wcp.priors import apply_elo_priors
-from wcp.simulation import simulate_tournament
+from wcp.simulation import simulate_tournament_detailed, stage_probs_to_dataframe
+from wcp.path_features import build_path_table
 from wcp.train import train
 from wcp import viz
 
@@ -44,16 +45,16 @@ def generate_report(n_sims: int = DEFAULT_SIMULATIONS, retrain: bool = True) -> 
         json.dump(summary, f, indent=2)
 
     console.print("[bold]3/4[/bold] Simulating tournament...")
-    results = simulate_tournament(predictor, n_sims=n_sims, seed=42)
-    pred_df = pd.DataFrame([
-        {"team": t, "win_probability": p, "elo": predictor.elo.get(t)}
-        for t, p in results.items()
-    ]).sort_values("win_probability", ascending=False)
+    result = simulate_tournament_detailed(predictor, n_sims=n_sims, seed=42)
+    pred_df = stage_probs_to_dataframe(result)
     pred_df.to_csv(RESULTS_DIR / "predictions_2026.csv", index=False)
+    pd.DataFrame(build_path_table(predictor.elo.get)).to_csv(
+        RESULTS_DIR / "path_difficulty.csv", index=False
+    )
 
     console.print("[bold]4/4[/bold] Generating figures...")
     paths = [
-        viz.plot_win_probabilities(results, predictor),
+        viz.plot_win_probabilities(result.win_probs, predictor),
         viz.plot_elo_rankings(predictor),
         viz.plot_attack_defense(predictor),
         viz.plot_goals_distribution(matches),

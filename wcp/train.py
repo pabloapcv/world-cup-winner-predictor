@@ -18,24 +18,25 @@ console = Console()
 def train(verbose: bool = True) -> EnsemblePredictor:
     matches = load_matches()
     elo_for_features = __import__("wcp.models.elo", fromlist=["EloRatings"]).EloRatings()
-    train_df = build_training_frame(matches, elo_for_features)
+    train_df, team_store = build_training_frame(matches, elo_for_features)
 
-    predictor = EnsemblePredictor()
+    predictor = EnsemblePredictor(team_store=team_store)
     predictor.fit(matches, train_df)
     apply_elo_priors(predictor.elo)
     predictor.save()
 
     if verbose:
-        console.print(f"[green]Trained on {len(matches)} matches[/green]")
+        console.print(f"[green]Trained on {len(matches)} matches with {len(train_df.columns)} features[/green]")
         table = Table(title="Top 15 Teams by Elo Rating")
         table.add_column("Rank", style="dim")
         table.add_column("Team")
         table.add_column("Elo", justify="right")
-        table.add_column("Attack", justify="right")
-        table.add_column("Defense", justify="right")
+        table.add_column("Form(10)", justify="right")
+        table.add_column("Squad €M", justify="right")
 
-        for i, (team, elo, att, deff) in enumerate(predictor.ratings_table()[:15], 1):
-            table.add_row(str(i), team, f"{elo:.0f}", f"{att:.3f}", f"{deff:.3f}")
+        for i, (team, elo, _, _) in enumerate(predictor.ratings_table()[:15], 1):
+            snap = team_store.get(team)
+            table.add_row(str(i), team, f"{elo:.0f}", f"{snap.points_last10:.2f}", f"{snap.squad_value:.0f}")
         console.print(table)
 
     return predictor

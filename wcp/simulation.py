@@ -3,11 +3,22 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from dataclasses import dataclass, field
 
 import numpy as np
+import pandas as pd
 
 from wcp.config import DEFAULT_SIMULATIONS, HOST_NATIONS, WORLD_CUP_2026_GROUPS
 from wcp.models.ensemble import EnsemblePredictor
+
+STAGES = ("r32", "r16", "quarter", "semi", "final", "champion")
+
+
+@dataclass
+class SimulationResult:
+    win_probs: dict[str, float] = field(default_factory=dict)
+    stage_probs: dict[str, dict[str, float]] = field(default_factory=dict)
+    n_sims: int = 0
 
 
 def _play_match(
@@ -16,16 +27,14 @@ def _play_match(
     away: str,
     rng: np.random.Generator,
     neutral: bool = True,
-) -> tuple[str, int, int]:
+) -> str:
     hg, ag = predictor.dixon_coles.sample_score(home, away, neutral=neutral, rng=rng)
     if hg > ag:
-        return home, hg, ag
+        return home
     if ag > hg:
-        return away, hg, ag
-    # Penalties — use Elo (fast) for knockout tiebreaks
+        return away
     p_h, _, p_a = predictor.elo.win_prob(home, away, neutral=neutral)
-    winner = home if rng.random() < p_h / (p_h + p_a) else away
-    return winner, hg, ag
+    return home if rng.random() < p_h / (p_h + p_a) else away
 
 
 def _group_standings(
@@ -57,39 +66,51 @@ def _advance_from_groups(
     predictor: EnsemblePredictor,
     rng: np.random.Generator,
 ) -> list[str]:
-    group_results: dict[str, list[dict]] = {}
     third_places: list[dict] = []
+    qualified: list[str] = []
 
-    for g, teams in groups.items():
+    for teams in groups.values():
         standings = _group_standings(teams, predictor, rng)
-        group_results[g] = standings
-        third_places.append({**standings[2], "group": g})
-
-    # Top 2 from each group
-    qualified = []
-    for g, standings in group_results.items():
         qualified.extend([standings[0]["team"], standings[1]["team"]])
+        third_places.append(standings[2])
 
-    # 8 best third-place teams
     third_places.sort(key=lambda x: (-x["pts"], -x["gd"], -x["gf"]))
     qualified.extend([t["team"] for t in third_places[:8]])
     return qualified
 
 
-def _knockout_bracket(teams: list[str], predictor: EnsemblePredictor, rng: np.random.Generator) -> str:
-    """Knockout phase with Elo-based seeding."""
-    current = sorted(teams, key=lambda t: predictor.elo.get(t), reverse=True)
-    while len(current) > 1:
-        next_round = []
-        for i in range(0, len(current), 2):
-            if i + 1 >= len(current):
-                next_round.append(current[i])
-                continue
-            h, a = current[i], current[i + 1]
-            winner, _, _ = _play_match(predictor, h, a, rng, neutral=True)
-            next_round.append(winner)
-        current = next_round
-    return current[0]
+def _knockout_round(teams: list[str], predictor: EnsemblePredictor, rng: np.random.Generator) -> list[str]:
+    seeded = sorted(teams, key=lambda t: predictor.elo.get(t), reverse=True)
+    winners = []
+    for i in range(0, len(seeded), 2):
+        if i + 1 >= len(seeded):
+            winners.append(seeded[i])
+            continue
+        winners.append(_play_match(predictor, seeded[i], seeded[i + 1], rng))
+    return winners
+
+
+def _simulate_one(
+    predictor: EnsemblePredictor,
+    groups: dict[str, list[str]],
+    rng: np.random.Generator,
+    stage_counts: dict[str, dict[str, int]],
+) -> str:
+    qualified = _advance_from_groups(groups, predictor, rng)
+    for t in qualified:
+        stage_counts[t]["r32"] += 1
+
+    rounds = [32, 16, 8, 4, 2]
+    stage_keys = ["r16", "quarter", "semi", "final", "champion"]
+    current = qualified
+
+    for n_teams, stage in zip(rounds, stage_keys):
+        current = _knockout_round(current, predictor, rng)
+        for t in current:
+            stage_counts[t][stage] += 1
+
+    champion = current[0]
+    return champion
 
 
 def simulate_tournament(
@@ -98,16 +119,42 @@ def simulate_tournament(
     groups: dict[str, list[str]] | None = None,
     seed: int = 42,
 ) -> dict[str, float]:
+    return simulate_tournament_detailed(predictor, n_sims, groups, seed).win_probs
+
+
+def simulate_tournament_detailed(
+    predictor: EnsemblePredictor,
+    n_sims: int = DEFAULT_SIMULATIONS,
+    groups: dict[str, list[str]] | None = None,
+    seed: int = 42,
+) -> SimulationResult:
     groups = groups or WORLD_CUP_2026_GROUPS
+    all_teams = sorted({t for grp in groups.values() for t in grp})
+    stage_counts: dict[str, dict[str, int]] = {
+        t: {s: 0 for s in STAGES} for t in all_teams
+    }
     wins: dict[str, int] = defaultdict(int)
     rng = np.random.default_rng(seed)
 
     for _ in range(n_sims):
-        qualified = _advance_from_groups(groups, predictor, rng)
-        champion = _knockout_bracket(qualified, predictor, rng)
+        champion = _simulate_one(predictor, groups, rng, stage_counts)
         wins[champion] += 1
 
-    return {team: count / n_sims for team, count in wins.items()}
+    win_probs = {t: wins.get(t, 0) / n_sims for t in all_teams}
+    stage_probs = {
+        t: {s: stage_counts[t][s] / n_sims for s in STAGES}
+        for t in all_teams
+    }
+    return SimulationResult(win_probs=win_probs, stage_probs=stage_probs, n_sims=n_sims)
+
+
+def stage_probs_to_dataframe(result: SimulationResult) -> pd.DataFrame:
+    rows = []
+    for team, stages in result.stage_probs.items():
+        row = {"team": team, **stages}
+        row["win_probability"] = stages["champion"]
+        rows.append(row)
+    return pd.DataFrame(rows).sort_values("win_probability", ascending=False)
 
 
 def simulate_with_host_boost(
@@ -115,7 +162,6 @@ def simulate_with_host_boost(
     n_sims: int = DEFAULT_SIMULATIONS,
     host_boost: float = 50.0,
 ) -> dict[str, float]:
-    """Apply Elo boost to host nations for home-adjacent advantage."""
     original = {}
     for host in HOST_NATIONS:
         if host in predictor.elo.ratings:

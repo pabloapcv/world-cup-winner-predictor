@@ -20,6 +20,23 @@ TEAM_ELO_PRIORS: dict[str, float] = {
     "Haiti": 1400, "Curaçao": 1380,
 }
 
+# Approximate squad market value (millions EUR, Transfermarkt-style estimates)
+TEAM_SQUAD_VALUE: dict[str, float] = {
+    "France": 1250, "England": 1180, "Spain": 1100, "Brazil": 1050,
+    "Argentina": 980, "Germany": 920, "Portugal": 880, "Netherlands": 850,
+    "Belgium": 780, "Italy": 750, "Colombia": 420, "Uruguay": 400,
+    "Croatia": 380, "Morocco": 350, "Mexico": 340, "United States": 320,
+    "Switzerland": 310, "Japan": 300, "Senegal": 280, "Austria": 270,
+    "Turkey": 260, "Ecuador": 250, "Norway": 240, "Denmark": 230,
+    "Paraguay": 200, "Egypt": 190, "Scotland": 180, "South Korea": 175,
+    "Australia": 170, "Iran": 160, "Algeria": 155, "Ivory Coast": 150,
+    "Tunisia": 140, "Sweden": 135, "Czech Republic": 130, "Canada": 125,
+    "Panama": 90, "Ghana": 85, "Saudi Arabia": 80, "Qatar": 75,
+    "Jordan": 70, "Iraq": 65, "South Africa": 60, "DR Congo": 55,
+    "Uzbekistan": 50, "Cape Verde": 45, "Bosnia and Herzegovina": 42,
+    "New Zealand": 35, "Haiti": 25, "Curaçao": 20,
+}
+
 
 def all_wc_teams() -> list[str]:
     teams = []

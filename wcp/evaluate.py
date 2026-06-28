@@ -14,10 +14,6 @@ from wcp.models.ensemble import EnsemblePredictor
 
 
 def evaluate_models(matches: pd.DataFrame | None = None, test_from_year: int = 2018) -> pd.DataFrame:
-    """
-    Chronological backtest: train on matches before test_from_year,
-    evaluate on matches from test_from_year onward.
-    """
     matches = matches if matches is not None else load_matches()
     train = matches[matches["date"].dt.year < test_from_year].copy()
     test = matches[matches["date"].dt.year >= test_from_year].copy()
@@ -26,9 +22,9 @@ def evaluate_models(matches: pd.DataFrame | None = None, test_from_year: int = 2
         raise ValueError(f"No test matches found from year {test_from_year}")
 
     elo_feat = EloRatings()
-    train_df = build_training_frame(train, elo_feat)
+    train_df, team_store = build_training_frame(train, elo_feat)
 
-    predictor = EnsemblePredictor()
+    predictor = EnsemblePredictor(team_store=team_store)
     predictor.elo.fit(train)
     predictor.dixon_coles.fit(train)
 
@@ -37,7 +33,8 @@ def evaluate_models(matches: pd.DataFrame | None = None, test_from_year: int = 2
     predictor.lightgbm.model = gbm  # type: ignore[assignment]
 
     def _gbm_probs(h, a, n):
-        probs = gbm.predict_proba(match_features(h, a, predictor.elo, neutral=n, is_wc=True))[0]
+        feats = match_features(h, a, predictor.elo, team_store, neutral=n, is_wc=True)
+        probs = gbm.predict_proba(feats)[0]
         return float(probs[0]), float(probs[1]), float(probs[2])
 
     rows = []
